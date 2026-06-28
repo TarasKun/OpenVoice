@@ -16,6 +16,19 @@ enum WhisperModelSize: String, CaseIterable, Identifiable {
         "ggml-\(rawValue).bin"
     }
 
+    var estimatedVRAMUsage: String {
+        switch self {
+        case .tiny:
+            "~390 MB VRAM"
+        case .base:
+            "~500 MB VRAM"
+        case .small:
+            "~1 GB VRAM"
+        case .medium:
+            "~2.6 GB VRAM"
+        }
+    }
+
     var downloadURL: URL {
         URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(fileName)")!
     }

@@ -4,20 +4,20 @@ struct ModelManagerView: View {
     @Bindable var modelManager: WhisperModelManager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Active model", selection: $modelManager.selectedModel) {
-                ForEach(WhisperModelSize.allCases) { model in
-                    Text(model.displayName).tag(model)
-                }
-            }
-            .pickerStyle(.menu)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Models")
+                .font(.headline)
+
+            Text("Active model requires \(modelManager.selectedModel.estimatedVRAMUsage).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             ForEach(WhisperModelSize.allCases) { model in
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.displayName)
                             .font(.body)
-                        Text(model.fileName)
+                        Text("\(model.fileName) · \(model.estimatedVRAMUsage)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -44,6 +44,16 @@ struct ModelManagerView: View {
                         }
                         .help("Download model")
                     }
+                }
+                .padding(8)
+                .contentShape(Rectangle())
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(modelManager.selectedModel == model ? Color.accentColor : Color.clear, lineWidth: 2)
+                }
+                .onTapGesture {
+                    modelManager.selectedModel = model
                 }
             }
 

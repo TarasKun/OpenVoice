@@ -4,19 +4,10 @@ struct RecordingControlView: View {
     let isRecording: Bool
     let isTranscribing: Bool
     let currentDecibels: Float
-    let thresholdDecibels: Float
     let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button(action: action) {
-                Label(buttonTitle, systemImage: buttonSystemImage)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(isTranscribing)
-
+        VStack(spacing: 10) {
             HStack {
                 Image(systemName: "waveform")
                 ProgressView(value: normalizedLevel)
@@ -26,10 +17,16 @@ struct RecordingControlView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 54, alignment: .trailing)
             }
+            .opacity(isRecording ? 1 : 0.16)
+            .frame(height: 16)
 
-            Text("Smart stop: below \(Int(thresholdDecibels)) dB for 7 seconds")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Button(action: action) {
+                Label(buttonTitle, systemImage: buttonSystemImage)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(isTranscribing)
         }
     }
 
