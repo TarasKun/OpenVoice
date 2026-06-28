@@ -6,8 +6,17 @@ import Observation
 final class WhisperModelManager {
     var selectedModel: WhisperModelSize = .base
     var downloadProgress: [WhisperModelSize: Double] = [:]
+    var downloadingModels: Set<WhisperModelSize> = []
     var downloadedModels: Set<WhisperModelSize> = []
     var lastErrorMessage: String?
+
+    var activeModel: WhisperModelSize? {
+        if downloadedModels.contains(selectedModel) {
+            selectedModel
+        } else {
+            firstDownloadedModel
+        }
+    }
 
     private var downloadTasks: [WhisperModelSize: Task<Void, Never>] = [:]
 
@@ -27,55 +36,56 @@ final class WhisperModelManager {
         downloadedModels = Set(
             WhisperModelSize.allCases.filter { FileManager.default.fileExists(atPath: localURL(for: $0).path) }
         )
+        normalizeSelection()
+    }
+
+    func select(_ model: WhisperModelSize) {
+        guard downloadedModels.contains(model) else { return }
+        selectedModel = model
     }
 
     func download(_ model: WhisperModelSize) {
         guard downloadTasks[model] == nil else { return }
 
-        downloadProgress[model] = 0
+        downloadingModels.insert(model)
+        downloadProgress[model] = nil
         let task = Task { [weak self] in
             guard let self else { return }
 
             do {
                 try FileManager.default.createDirectory(at: self.modelsDirectory, withIntermediateDirectories: true)
                 let destinationURL = self.localURL(for: model)
-                let temporaryURL = self.modelsDirectory.appending(path: "\(model.fileName).download")
 
-                if FileManager.default.fileExists(atPath: temporaryURL.path) {
-                    try FileManager.default.removeItem(at: temporaryURL)
-                }
-
-                let (bytes, response) = try await URLSession.shared.bytes(from: model.downloadURL)
-                let expectedLength = Double(response.expectedContentLength)
-                FileManager.default.createFile(atPath: temporaryURL.path, contents: nil)
-
-                let fileHandle = try FileHandle(forWritingTo: temporaryURL)
-                var receivedLength = 0
-
-                for try await byte in bytes {
-                    try Task.checkCancellation()
-                    try fileHandle.write(contentsOf: [byte])
-                    receivedLength += 1
-
-                    if expectedLength > 0 {
-                        self.downloadProgress[model] = min(Double(receivedLength) / expectedLength, 0.99)
+                let (temporaryURL, response) = try await Self.downloadFile(from: model.downloadURL) { [weak self] progress in
+                    Task { @MainActor in
+                        guard let self, self.downloadTasks[model] != nil else { return }
+                        if let progress {
+                            self.downloadProgress[model] = min(max(progress, 0), 0.99)
+                        } else {
+                            self.downloadProgress[model] = nil
+                        }
                     }
                 }
 
-                try fileHandle.close()
+                if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
+                    throw URLError(.badServerResponse)
+                }
 
                 if FileManager.default.fileExists(atPath: destinationURL.path) {
                     try FileManager.default.removeItem(at: destinationURL)
                 }
+
                 try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
 
                 self.downloadProgress[model] = 1
                 self.refreshDownloadedModels()
                 self.lastErrorMessage = nil
             } catch {
+                self.downloadProgress[model] = nil
                 self.lastErrorMessage = error.localizedDescription
             }
 
+            self.downloadingModels.remove(model)
             self.downloadTasks[model] = nil
         }
 
@@ -89,6 +99,7 @@ final class WhisperModelManager {
                 try FileManager.default.removeItem(at: url)
             }
             downloadProgress[model] = nil
+            downloadingModels.remove(model)
             refreshDownloadedModels()
             lastErrorMessage = nil
         } catch {
@@ -101,4 +112,53 @@ final class WhisperModelManager {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "OpenVoice/Models", directoryHint: .isDirectory)
     }
+
+    private var firstDownloadedModel: WhisperModelSize? {
+        WhisperModelSize.allCases.first { downloadedModels.contains($0) }
+    }
+
+    private func normalizeSelection() {
+        if let firstDownloadedModel, !downloadedModels.contains(selectedModel) {
+            selectedModel = firstDownloadedModel
+        }
+    }
+
+    private static func downloadFile(
+        from url: URL,
+        onProgress: @escaping @Sendable (Double?) -> Void
+    ) async throws -> (URL, URLResponse) {
+        try await withCheckedThrowingContinuation { continuation in
+            let observationBox = DownloadProgressObservationBox()
+            let task = URLSession.shared.downloadTask(with: url) { temporaryURL, response, error in
+                observationBox.observation?.invalidate()
+                observationBox.observation = nil
+
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let temporaryURL, let response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+
+                continuation.resume(returning: (temporaryURL, response))
+            }
+
+            observationBox.observation = task.progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
+                if progress.totalUnitCount > 0 {
+                    onProgress(progress.fractionCompleted)
+                } else {
+                    onProgress(nil)
+                }
+            }
+
+            task.resume()
+        }
+    }
+}
+
+private final class DownloadProgressObservationBox: @unchecked Sendable {
+    var observation: NSKeyValueObservation?
 }

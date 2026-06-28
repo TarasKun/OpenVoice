@@ -8,7 +8,7 @@ struct ModelManagerView: View {
             Text("Models")
                 .font(.headline)
 
-            Text("Active model requires \(modelManager.selectedModel.estimatedVRAMUsage).")
+            Text(activeModelSummary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -24,9 +24,15 @@ struct ModelManagerView: View {
 
                     Spacer()
 
-                    if let progress = modelManager.downloadProgress[model], progress > 0, progress < 1 {
-                        ProgressView(value: progress)
-                            .frame(width: 56)
+                    if modelManager.downloadingModels.contains(model) {
+                        if let progress = modelManager.downloadProgress[model] {
+                            ProgressView(value: progress)
+                                .frame(width: 56)
+                        } else {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 56)
+                        }
                     }
 
                     if modelManager.isDownloaded(model) {
@@ -50,10 +56,11 @@ struct ModelManagerView: View {
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(modelManager.selectedModel == model ? Color.accentColor : Color.clear, lineWidth: 2)
+                        .stroke(modelManager.activeModel == model ? Color.accentColor : Color.clear, lineWidth: 2)
                 }
+                .opacity(modelManager.isDownloaded(model) ? 1 : 0.72)
                 .onTapGesture {
-                    modelManager.selectedModel = model
+                    modelManager.select(model)
                 }
             }
 
@@ -62,6 +69,14 @@ struct ModelManagerView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+        }
+    }
+
+    private var activeModelSummary: String {
+        if let activeModel = modelManager.activeModel {
+            "Active model requires \(activeModel.estimatedVRAMUsage)."
+        } else {
+            "No models downloaded."
         }
     }
 }

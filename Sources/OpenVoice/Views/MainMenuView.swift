@@ -44,6 +44,7 @@ struct MainMenuView: View {
                 recordingTargetItemID: recordingTargetItemID,
                 isRecording: audioService.isRecording,
                 isTranscribing: isTranscribing,
+                canRecord: modelManager.activeModel != nil,
                 onRecordInto: recordInto
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,12 +58,21 @@ struct MainMenuView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                RecordingControlView(
-                    isRecording: audioService.isRecording,
-                    isTranscribing: isTranscribing,
-                    currentDecibels: audioService.currentDecibels,
-                    action: toggleRecording
-                )
+                if modelManager.activeModel == nil {
+                    Text("No models available. Go to Settings to download a model.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                } else {
+                    RecordingControlView(
+                        isRecording: audioService.isRecording,
+                        isTranscribing: isTranscribing,
+                        currentDecibels: audioService.currentDecibels,
+                        action: toggleRecording
+                    )
+                }
             }
         }
         .padding(16)
@@ -70,6 +80,7 @@ struct MainMenuView: View {
     }
 
     private func toggleRecording() {
+        guard modelManager.activeModel != nil else { return }
         recordingTargetItemID = nil
 
         if audioService.isRecording {
@@ -85,7 +96,7 @@ struct MainMenuView: View {
     }
 
     private func recordInto(_ item: TranscriptionItem) {
-        guard !isTranscribing else { return }
+        guard !isTranscribing, modelManager.activeModel != nil else { return }
 
         if audioService.isRecording {
             guard recordingTargetItemID == item.id else { return }
@@ -107,7 +118,14 @@ struct MainMenuView: View {
         statusMessage = "Transcribing..."
 
         do {
-            let modelURL = modelManager.localURL(for: modelManager.selectedModel)
+            guard let activeModel = modelManager.activeModel else {
+                statusMessage = "No models available. Go to Settings to download a model."
+                recordingTargetItemID = nil
+                isTranscribing = false
+                return
+            }
+
+            let modelURL = modelManager.localURL(for: activeModel)
             let text = try await transcriber.transcribe(audioURL: audioURL, modelURL: modelURL)
 
             if let recordingTargetItemID, let item = try fetchItem(id: recordingTargetItemID) {
