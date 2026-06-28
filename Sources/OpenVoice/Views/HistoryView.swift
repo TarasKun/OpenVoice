@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 
 struct HistoryView: View {
+    private let bottomAnchorID = "history-bottom-anchor"
+
     @Query(sort: \TranscriptionItem.timestamp, order: .forward)
     private var items: [TranscriptionItem]
     let recordingTargetItemID: UUID?
@@ -36,6 +38,10 @@ struct HistoryView: View {
                                 )
                                 .id(item.id)
                             }
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id(bottomAnchorID)
                         }
                         .padding(.vertical, 2)
                         .padding(.bottom, 14)
@@ -53,10 +59,12 @@ struct HistoryView: View {
     }
 
     private func scrollToNewest(using scrollProxy: ScrollViewProxy) {
-        guard let newestItemID = items.last?.id else { return }
+        guard !items.isEmpty else { return }
 
-        DispatchQueue.main.async {
-            scrollProxy.scrollTo(newestItemID, anchor: .bottom)
+        for delay in [0.0, 0.08, 0.18, 0.35] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                scrollProxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            }
         }
     }
 }

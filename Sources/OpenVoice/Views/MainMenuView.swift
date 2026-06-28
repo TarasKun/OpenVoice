@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -12,6 +13,7 @@ struct MainMenuView: View {
     @State private var isShowingSettings = false
     @State private var recordingTargetItemID: UUID?
     @State private var statusMessage: String?
+    @State private var reloadID = UUID()
 
     init() {
         _audioService = State(initialValue: AudioRecordingService())
@@ -75,8 +77,24 @@ struct MainMenuView: View {
                 }
             }
         }
+        .id(reloadID)
         .padding(16)
         .frame(width: 380, height: 560, alignment: .top)
+        .contextMenu {
+            Button {
+                reloadWidget()
+            } label: {
+                Label("Reload", systemImage: "arrow.clockwise")
+            }
+
+            Divider()
+
+            Button {
+                quitApplication()
+            } label: {
+                Label("Quit", systemImage: "power")
+            }
+        }
     }
 
     private func toggleRecording() {
@@ -169,5 +187,24 @@ struct MainMenuView: View {
         }
 
         return "\(trimmedExistingText)\n\n\(trimmedNewText)"
+    }
+
+    private func reloadWidget() {
+        if audioService.isRecording {
+            _ = audioService.stopRecording()
+        }
+
+        audioService = AudioRecordingService()
+        modelManager = WhisperModelManager()
+        transcriber = WhisperTranscriptionService()
+        isTranscribing = false
+        isShowingSettings = false
+        recordingTargetItemID = nil
+        statusMessage = nil
+        reloadID = UUID()
+    }
+
+    private func quitApplication() {
+        NSApplication.shared.terminate(nil)
     }
 }

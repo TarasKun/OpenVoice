@@ -4,14 +4,16 @@ import Observation
 @MainActor
 @Observable
 final class WhisperModelManager {
-    var selectedModel: WhisperModelSize = .base
+    private static let selectedModelDefaultsKey = "selectedWhisperModel"
+
+    var selectedModel: WhisperModelSize?
     var downloadProgress: [WhisperModelSize: Double] = [:]
     var downloadingModels: Set<WhisperModelSize> = []
     var downloadedModels: Set<WhisperModelSize> = []
     var lastErrorMessage: String?
 
     var activeModel: WhisperModelSize? {
-        if downloadedModels.contains(selectedModel) {
+        if let selectedModel, downloadedModels.contains(selectedModel) {
             selectedModel
         } else {
             firstDownloadedModel
@@ -21,6 +23,7 @@ final class WhisperModelManager {
     private var downloadTasks: [WhisperModelSize: Task<Void, Never>] = [:]
 
     init() {
+        selectedModel = Self.restoreSelectedModel()
         refreshDownloadedModels()
     }
 
@@ -42,6 +45,7 @@ final class WhisperModelManager {
     func select(_ model: WhisperModelSize) {
         guard downloadedModels.contains(model) else { return }
         selectedModel = model
+        persistSelection()
     }
 
     func download(_ model: WhisperModelSize) {
@@ -79,6 +83,7 @@ final class WhisperModelManager {
 
                 self.downloadProgress[model] = 1
                 self.refreshDownloadedModels()
+                self.select(model)
                 self.lastErrorMessage = nil
             } catch {
                 self.downloadProgress[model] = nil
@@ -118,9 +123,31 @@ final class WhisperModelManager {
     }
 
     private func normalizeSelection() {
-        if let firstDownloadedModel, !downloadedModels.contains(selectedModel) {
+        if downloadedModels.isEmpty {
+            selectedModel = nil
+            UserDefaults.standard.removeObject(forKey: Self.selectedModelDefaultsKey)
+        } else if let selectedModel, downloadedModels.contains(selectedModel) {
+            persistSelection()
+        } else if let firstDownloadedModel {
             selectedModel = firstDownloadedModel
+            persistSelection()
         }
+    }
+
+    private func persistSelection() {
+        if let selectedModel {
+            UserDefaults.standard.set(selectedModel.rawValue, forKey: Self.selectedModelDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.selectedModelDefaultsKey)
+        }
+    }
+
+    private static func restoreSelectedModel() -> WhisperModelSize? {
+        guard let rawValue = UserDefaults.standard.string(forKey: selectedModelDefaultsKey) else {
+            return nil
+        }
+
+        return WhisperModelSize(rawValue: rawValue)
     }
 
     private static func downloadFile(

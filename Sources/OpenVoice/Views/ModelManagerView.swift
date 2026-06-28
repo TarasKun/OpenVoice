@@ -17,7 +17,10 @@ struct ModelManagerView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.displayName)
                             .font(.body)
-                        Text("\(model.fileName) · \(model.estimatedVRAMUsage)")
+                        Text(model.fileName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Size: \(model.diskSize) · VRAM: \(model.estimatedVRAMUsage)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -74,7 +77,7 @@ struct ModelManagerView: View {
 
     private var activeModelSummary: String {
         if let activeModel = modelManager.activeModel {
-            "Active model requires \(activeModel.estimatedVRAMUsage)."
+            "Active model: Size \(activeModel.diskSize), VRAM \(activeModel.estimatedVRAMUsage)."
         } else {
             "No models downloaded."
         }

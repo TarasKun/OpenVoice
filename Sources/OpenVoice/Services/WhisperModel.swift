@@ -16,16 +16,29 @@ enum WhisperModelSize: String, CaseIterable, Identifiable {
         "ggml-\(rawValue).bin"
     }
 
+    var diskSize: String {
+        switch self {
+        case .tiny:
+            "74 MB"
+        case .base:
+            "142 MB"
+        case .small:
+            "466 MB"
+        case .medium:
+            "1.5 GB"
+        }
+    }
+
     var estimatedVRAMUsage: String {
         switch self {
         case .tiny:
-            "~390 MB VRAM"
+            "~390 MB"
         case .base:
-            "~500 MB VRAM"
+            "~500 MB"
         case .small:
-            "~1 GB VRAM"
+            "~1 GB"
         case .medium:
-            "~2.6 GB VRAM"
+            "~2.6 GB"
         }
     }
 
