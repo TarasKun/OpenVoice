@@ -4,7 +4,7 @@ import SwiftUI
 struct HistoryView: View {
     @Query(sort: \TranscriptionItem.timestamp, order: .forward)
     private var items: [TranscriptionItem]
-    let continuationItemID: UUID?
+    let recordingTargetItemID: UUID?
     let isRecording: Bool
     let isTranscribing: Bool
     let onRecordInto: (TranscriptionItem) -> Void
@@ -20,7 +20,7 @@ struct HistoryView: View {
                         ForEach(items) { item in
                             TranscriptionRowView(
                                 item: item,
-                                isContinuationTarget: continuationItemID == item.id,
+                                isRecordingTarget: recordingTargetItemID == item.id,
                                 isRecording: isRecording,
                                 isTranscribing: isTranscribing,
                                 onRecordInto: onRecordInto
@@ -29,37 +29,68 @@ struct HistoryView: View {
                     }
                     .padding(.vertical, 2)
                 }
+                .coordinateSpace(name: "historyScroll")
             }
         }
     }
 }
 
 private struct TranscriptionRowView: View {
+    private let notePadding: CGFloat = 14
+    private let actionBlockHeight: CGFloat = 74
+    private let confirmationBlockHeight: CGFloat = 86
+
     @Environment(\.modelContext) private var modelContext
     @Bindable var item: TranscriptionItem
-    let isContinuationTarget: Bool
+    let isRecordingTarget: Bool
     let isRecording: Bool
     let isTranscribing: Bool
     let onRecordInto: (TranscriptionItem) -> Void
     @State private var isConfirmingDelete = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(item.timestamp, style: .time)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("Transcript", text: $item.text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .lineLimit(1...40)
+                .onChange(of: item.text) { _, _ in
+                    save()
+                }
+        }
+        .padding(notePadding)
+        .padding(.trailing, 40)
+        .frame(maxWidth: .infinity, minHeight: minimumNoteHeight, alignment: .leading)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isRecordingTarget ? Color.accentColor : Color.clear, lineWidth: 2)
+        }
+        .overlay(alignment: .topTrailing) {
+            stickyActionOverlay
+        }
+    }
+
+    private var stickyActionOverlay: some View {
+        GeometryReader { proxy in
+            actionBlock
+                .padding(.top, notePadding)
+                .padding(.trailing, notePadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .offset(y: stickyYOffset(for: proxy.frame(in: .named("historyScroll"))))
+        }
+    }
+
+    @ViewBuilder
+    private var actionBlock: some View {
+        if isConfirmingDelete {
+            deleteConfirmationView
+        } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text(item.timestamp, style: .time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                TextField("Transcript", text: $item.text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .lineLimit(1...40)
-                    .onChange(of: item.text) { _, _ in
-                        save()
-                    }
-            }
-
-            VStack(spacing: 10) {
                 actionButton(systemImage: "xmark", help: "Delete note") {
                     isConfirmingDelete = true
                 }
@@ -70,28 +101,19 @@ private struct TranscriptionRowView: View {
                 .disabled(isTranscribing)
 
                 actionButton(systemImage: "doc.on.doc", help: "Copy transcript") {
-                    ClipboardService.copy(item.text)
+                    copyFullNote()
                 }
             }
             .frame(width: 24)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isContinuationTarget ? Color.accentColor : Color.clear, lineWidth: 2)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if isConfirmingDelete {
-                deleteConfirmationView
-                    .padding(8)
-            }
-        }
+    }
+
+    private var minimumNoteHeight: CGFloat {
+        actionBlockHeight + notePadding * 2
     }
 
     private var recordIconName: String {
-        if isContinuationTarget, isRecording {
+        if isRecordingTarget, isRecording {
             "stop.circle.fill"
         } else {
             "record.circle"
@@ -120,6 +142,16 @@ private struct TranscriptionRowView: View {
         .shadow(radius: 8, y: 3)
     }
 
+    private func stickyYOffset(for rowFrame: CGRect) -> CGFloat {
+        let visibleActionBlockHeight = isConfirmingDelete ? confirmationBlockHeight : actionBlockHeight
+        let topInset = notePadding
+        let bottomInset = notePadding
+        let pinnedOffset = max(0, -rowFrame.minY + topInset)
+        let maxOffset = max(0, rowFrame.height - visibleActionBlockHeight - bottomInset)
+
+        return min(pinnedOffset, maxOffset)
+    }
+
     private func actionButton(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
@@ -135,6 +167,10 @@ private struct TranscriptionRowView: View {
         } catch {
             assertionFailure("Unable to save edited transcription: \(error)")
         }
+    }
+
+    private func copyFullNote() {
+        ClipboardService.copy(item.text)
     }
 
     private func delete() {

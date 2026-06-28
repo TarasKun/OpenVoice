@@ -10,7 +10,7 @@ struct MainMenuView: View {
     @State private var transcriber = WhisperTranscriptionService()
     @State private var isTranscribing = false
     @State private var isShowingSettings = false
-    @State private var continuationItemID: UUID?
+    @State private var recordingTargetItemID: UUID?
     @State private var statusMessage: String?
 
     init() {
@@ -41,7 +41,7 @@ struct MainMenuView: View {
             }
 
             HistoryView(
-                continuationItemID: continuationItemID,
+                recordingTargetItemID: recordingTargetItemID,
                 isRecording: audioService.isRecording,
                 isTranscribing: isTranscribing,
                 onRecordInto: recordInto
@@ -70,6 +70,8 @@ struct MainMenuView: View {
     }
 
     private func toggleRecording() {
+        recordingTargetItemID = nil
+
         if audioService.isRecording {
             guard let url = audioService.stopRecording() else { return }
             Task { await transcribe(url) }
@@ -85,12 +87,12 @@ struct MainMenuView: View {
     private func recordInto(_ item: TranscriptionItem) {
         guard !isTranscribing else { return }
 
-        continuationItemID = item.id
-
         if audioService.isRecording {
+            guard recordingTargetItemID == item.id else { return }
             guard let url = audioService.stopRecording() else { return }
             Task { await transcribe(url) }
         } else {
+            recordingTargetItemID = item.id
             statusMessage = "Recording will append to this note."
             Task {
                 await audioService.startRecording { url in
@@ -108,7 +110,7 @@ struct MainMenuView: View {
             let modelURL = modelManager.localURL(for: modelManager.selectedModel)
             let text = try await transcriber.transcribe(audioURL: audioURL, modelURL: modelURL)
 
-            if let continuationItemID, let item = try fetchItem(id: continuationItemID) {
+            if let recordingTargetItemID, let item = try fetchItem(id: recordingTargetItemID) {
                 item.text = appendedText(existingText: item.text, newText: text)
                 statusMessage = "Appended transcription and copied it to clipboard."
             } else {
@@ -123,6 +125,7 @@ struct MainMenuView: View {
             statusMessage = error.localizedDescription
         }
 
+        recordingTargetItemID = nil
         isTranscribing = false
     }
 

@@ -21,7 +21,19 @@ struct RecordingControlView: View {
             .frame(height: 16)
 
             Button(action: action) {
-                Label(buttonTitle, systemImage: buttonSystemImage)
+                HStack(spacing: 8) {
+                    if isTranscribing {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .controlSize(.small)
+                            .frame(width: 16, height: 16)
+                    } else {
+                        Image(systemName: buttonSystemImage)
+                            .frame(width: 16, height: 16)
+                    }
+
+                    Text(buttonTitle)
+                }
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
