@@ -2,6 +2,19 @@ import AppKit
 import SwiftData
 import SwiftUI
 
+private enum RecordingTarget: Equatable {
+    case newNote
+    case existingNote(UUID)
+
+    var existingNoteID: UUID? {
+        if case .existingNote(let id) = self {
+            id
+        } else {
+            nil
+        }
+    }
+}
+
 @MainActor
 struct MainMenuView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,7 +24,7 @@ struct MainMenuView: View {
     @State private var transcriber = WhisperTranscriptionService()
     @State private var isTranscribing = false
     @State private var isShowingSettings = false
-    @State private var recordingTargetItemID: UUID?
+    @State private var recordingTarget: RecordingTarget?
     @State private var statusMessage: String?
     @State private var reloadID = UUID()
 
@@ -43,7 +56,7 @@ struct MainMenuView: View {
             }
 
             HistoryView(
-                recordingTargetItemID: recordingTargetItemID,
+                recordingTargetItemID: recordingTarget?.existingNoteID,
                 isRecording: audioService.isRecording,
                 isTranscribing: isTranscribing,
                 canRecord: modelManager.activeModel != nil,
@@ -99,12 +112,12 @@ struct MainMenuView: View {
 
     private func toggleRecording() {
         guard modelManager.activeModel != nil else { return }
-        recordingTargetItemID = nil
 
         if audioService.isRecording {
             guard let url = audioService.stopRecording() else { return }
             Task { await transcribe(url) }
         } else {
+            recordingTarget = .newNote
             Task {
                 await audioService.startRecording { url in
                     Task { await transcribe(url) }
@@ -117,11 +130,11 @@ struct MainMenuView: View {
         guard !isTranscribing, modelManager.activeModel != nil else { return }
 
         if audioService.isRecording {
-            guard recordingTargetItemID == item.id else { return }
+            guard recordingTarget == .existingNote(item.id) else { return }
             guard let url = audioService.stopRecording() else { return }
             Task { await transcribe(url) }
         } else {
-            recordingTargetItemID = item.id
+            recordingTarget = .existingNote(item.id)
             statusMessage = "Recording will append to this note."
             Task {
                 await audioService.startRecording { url in
@@ -138,7 +151,7 @@ struct MainMenuView: View {
         do {
             guard let activeModel = modelManager.activeModel else {
                 statusMessage = "No models available. Go to Settings to download a model."
-                recordingTargetItemID = nil
+                recordingTarget = nil
                 isTranscribing = false
                 return
             }
@@ -146,7 +159,7 @@ struct MainMenuView: View {
             let modelURL = modelManager.localURL(for: activeModel)
             let text = try await transcriber.transcribe(audioURL: audioURL, modelURL: modelURL)
 
-            if let recordingTargetItemID, let item = try fetchItem(id: recordingTargetItemID) {
+            if let noteID = recordingTarget?.existingNoteID, let item = try fetchItem(id: noteID) {
                 item.text = appendedText(existingText: item.text, newText: text)
                 statusMessage = "Appended transcription and copied it to clipboard."
             } else {
@@ -161,7 +174,7 @@ struct MainMenuView: View {
             statusMessage = error.localizedDescription
         }
 
-        recordingTargetItemID = nil
+        recordingTarget = nil
         isTranscribing = false
     }
 
@@ -199,7 +212,7 @@ struct MainMenuView: View {
         transcriber = WhisperTranscriptionService()
         isTranscribing = false
         isShowingSettings = false
-        recordingTargetItemID = nil
+        recordingTarget = nil
         statusMessage = nil
         reloadID = UUID()
     }
