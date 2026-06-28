@@ -19,6 +19,10 @@ let package = Package(
                 .linkedFramework("SwiftData"),
                 .linkedFramework("SwiftUI")
             ]
+        ),
+        .testTarget(
+            name: "OpenVoiceTests",
+            dependencies: ["OpenVoice"]
         )
     ]
 )

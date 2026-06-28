@@ -115,12 +115,12 @@ struct MainMenuView: View {
 
         if audioService.isRecording {
             guard let url = audioService.stopRecording() else { return }
-            Task { await transcribe(url) }
+            Task { await transcribe(url, stoppedBy: .globalButton) }
         } else {
             recordingTarget = .newNote
             Task {
                 await audioService.startRecording { url in
-                    Task { await transcribe(url) }
+                    Task { await transcribe(url, stoppedBy: .smartStop) }
                 }
             }
         }
@@ -132,19 +132,20 @@ struct MainMenuView: View {
         if audioService.isRecording {
             guard recordingTarget == .existingNote(item.id) else { return }
             guard let url = audioService.stopRecording() else { return }
-            Task { await transcribe(url) }
+            Task { await transcribe(url, stoppedBy: .noteButton(item.id)) }
         } else {
             recordingTarget = .existingNote(item.id)
             statusMessage = "Recording will append to this note."
             Task {
                 await audioService.startRecording { url in
-                    Task { await transcribe(url) }
+                    Task { await transcribe(url, stoppedBy: .smartStop) }
                 }
             }
         }
     }
 
-    private func transcribe(_ audioURL: URL) async {
+    private func transcribe(_ audioURL: URL, stoppedBy stopSource: RecordingStopSource) async {
+        let saveDestination = saveDestination(for: recordingTarget, stoppedBy: stopSource)
         isTranscribing = true
         statusMessage = "Transcribing..."
 
@@ -159,7 +160,7 @@ struct MainMenuView: View {
             let modelURL = modelManager.localURL(for: activeModel)
             let text = try await transcriber.transcribe(audioURL: audioURL, modelURL: modelURL)
 
-            if let noteID = recordingTarget?.existingNoteID, let item = try fetchItem(id: noteID) {
+            if case .existingNote(let noteID) = saveDestination, let item = try fetchItem(id: noteID) {
                 item.text = appendedText(existingText: item.text, newText: text)
                 statusMessage = "Appended transcription and copied it to clipboard."
             } else {
@@ -188,18 +189,22 @@ struct MainMenuView: View {
     }
 
     private func appendedText(existingText: String, newText: String) -> String {
-        let trimmedExistingText = existingText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedNewText = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        NoteTextFormatter.appendingTranscript(newText, to: existingText)
+    }
 
-        guard !trimmedExistingText.isEmpty else {
-            return trimmedNewText
+    private func saveDestination(
+        for target: RecordingTarget?,
+        stoppedBy stopSource: RecordingStopSource
+    ) -> TranscriptionSaveDestination {
+        let startTarget: RecordingStartTarget
+        switch target {
+        case .existingNote(let id):
+            startTarget = .note(id)
+        case .newNote, nil:
+            startTarget = .global
         }
 
-        guard !trimmedNewText.isEmpty else {
-            return trimmedExistingText
-        }
-
-        return "\(trimmedExistingText)\n\n\(trimmedNewText)"
+        return RecordingTargetDecision.destination(for: startTarget, stoppedBy: stopSource)
     }
 
     private func reloadWidget() {
