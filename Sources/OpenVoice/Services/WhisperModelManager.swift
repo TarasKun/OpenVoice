@@ -119,7 +119,11 @@ final class WhisperModelManager {
     }
 
     private var firstDownloadedModel: WhisperModelSize? {
-        WhisperModelSize.allCases.first { downloadedModels.contains($0) }
+        preferredFallbackModels.first { downloadedModels.contains($0) }
+    }
+
+    private var preferredFallbackModels: [WhisperModelSize] {
+        [.small, .base, .medium, .largeV3Turbo, .largeV3TurboQ5]
     }
 
     private func normalizeSelection() {

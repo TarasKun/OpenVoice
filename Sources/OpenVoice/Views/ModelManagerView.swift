@@ -2,11 +2,26 @@ import SwiftUI
 
 struct ModelManagerView: View {
     @Bindable var modelManager: WhisperModelManager
+    let onQuit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Models")
-                .font(.headline)
+            HStack {
+                Text("Models")
+                    .font(.headline)
+
+                Spacer()
+
+                Button(action: onQuit) {
+                    Image(systemName: "power")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .padding(4)
+                .contentShape(Rectangle())
+                .help("Quit Open Voice")
+            }
 
             Text(activeModelSummary)
                 .font(.caption)
@@ -20,7 +35,7 @@ struct ModelManagerView: View {
                         Text(model.fileName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("Size: \(model.diskSize) · VRAM: \(model.estimatedVRAMUsage)")
+                        Text("Size: \(model.diskSize) · RAM/VRAM: \(model.estimatedVRAMUsage)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -77,7 +92,7 @@ struct ModelManagerView: View {
 
     private var activeModelSummary: String {
         if let activeModel = modelManager.activeModel {
-            "Active model: Size \(activeModel.diskSize), VRAM \(activeModel.estimatedVRAMUsage)."
+            "Active model: Size \(activeModel.diskSize), RAM/VRAM \(activeModel.estimatedVRAMUsage)."
         } else {
             "No models downloaded."
         }

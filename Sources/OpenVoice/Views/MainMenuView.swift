@@ -24,6 +24,7 @@ struct MainMenuView: View {
     @State private var transcriber = WhisperTranscriptionService()
     @State private var isTranscribing = false
     @State private var isShowingSettings = false
+    @State private var isShowingQuitConfirmation = false
     @State private var recordingTarget: RecordingTarget?
     @State private var statusMessage: String?
     @State private var reloadID = UUID()
@@ -49,7 +50,7 @@ struct MainMenuView: View {
                 .buttonStyle(.plain)
                 .help("Settings")
                 .popover(isPresented: $isShowingSettings, arrowEdge: .top) {
-                    ModelManagerView(modelManager: modelManager)
+                    ModelManagerView(modelManager: modelManager, onQuit: requestQuitApplication)
                         .padding(16)
                         .frame(width: 340)
                 }
@@ -103,10 +104,20 @@ struct MainMenuView: View {
             Divider()
 
             Button {
-                quitApplication()
+                requestQuitApplication()
             } label: {
                 Label("Quit", systemImage: "power")
             }
+        }
+        .alert(
+            "Recording or transcription is in progress. Are you sure you want to quit?",
+            isPresented: $isShowingQuitConfirmation
+        ) {
+            Button("Quit", role: .destructive) {
+                quitApplication()
+            }
+
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -220,6 +231,14 @@ struct MainMenuView: View {
         recordingTarget = nil
         statusMessage = nil
         reloadID = UUID()
+    }
+
+    private func requestQuitApplication() {
+        if audioService.isRecording || isTranscribing {
+            isShowingQuitConfirmation = true
+        } else {
+            quitApplication()
+        }
     }
 
     private func quitApplication() {
